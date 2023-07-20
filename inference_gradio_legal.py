@@ -1,28 +1,34 @@
-import json
 from peft import PeftModel
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig, AutoModelForCausalLM
 from utils.prompter import Prompter
 
 
-tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-7b")
-prompt_template_name = "alpaca_summarization"
-# template = json.load(open(template, "r"))
+model_id = "tiiuae/falcon-7b"
+adapter_id = "lora-falcon-7b-legal-summary"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+prompt_template_name = "alpaca_modified"
 
 
 model = AutoModelForCausalLM.from_pretrained(
-    "tiiuae/falcon-7b",
+    model_id,
     load_in_8bit=True,
     device_map="auto",
     trust_remote_code=True,
 )
-model = PeftModel.from_pretrained(model, "lora-falcon-7b-legal-summary", adapter_name="legal")
+lora_model = PeftModel.from_pretrained(model, "lora-falcon-7b-legal-summary", adapter_name="legal")
+# lora_model = PeftModel.from_pretrained(model, "lora-alpaca-legal-summary", adapter_name="legal")
 
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
 prompter = Prompter(prompt_template_name)
 
-def generate(input_prompt, temperature, top_p, top_k, num_beams, max_tokens):
+def generate(instruction, input, temperature, top_p, top_k, num_beams, max_tokens, use_lora):
+
+    if use_lora:
+        current_model = lora_model
+    else:
+        current_model = model
 
     generation_config = GenerationConfig(
         temperature=temperature,
@@ -41,7 +47,7 @@ def generate(input_prompt, temperature, top_p, top_k, num_beams, max_tokens):
     # '''
     # PROMPT = template['prompt_no_input'].format(instruction=input_prompt)
 
-    PROMPT = prompter.generate_prompt(input_prompt)
+    PROMPT = prompter.generate_prompt(instruction, input)
     prompt_len = len(PROMPT)
 
     inputs = tokenizer(
@@ -51,7 +57,7 @@ def generate(input_prompt, temperature, top_p, top_k, num_beams, max_tokens):
     input_ids = inputs["input_ids"].cuda()
 
     print("Generating...")
-    generation_output = model.generate(
+    generation_output = current_model.generate(
         input_ids=input_ids,
         generation_config=generation_config,
         return_dict_in_generate=True,
@@ -73,9 +79,14 @@ gr.Interface(
         gr.components.Textbox(
             lines=2,
             label="Instruction",
-            placeholder="Tell me about the stock market.",
+            # interactive=False,
+            value="Write a detailed summary of the text provided in the input.",
         ),
-        # gr.components.Textbox(lines=2, label="Input", placeholder="none"),
+        gr.components.Textbox(
+            lines=2,
+            label="Input",
+            placeholder="Put here the text to summarize.",
+        ),
         gr.components.Slider(
             minimum=0, maximum=1, value=0.6, label="Temperature"
         ),
@@ -90,6 +101,9 @@ gr.Interface(
         ),
         gr.components.Slider(
             minimum=1, maximum=2000, step=32, value=128, label="Max tokens"
+        ),
+        gr.components.Checkbox(
+            value=False, label="Run without LoRA"
         ),
     ],
     outputs=[
