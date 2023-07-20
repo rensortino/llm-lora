@@ -108,6 +108,7 @@ def train(
     wandb_log_model: str = "",  # options: false | true
     resume_from_checkpoint: str = None,  # either training checkpoint or final adapter
     prompt_template_name: str = "alpaca",  # The prompt template to use, will default to alpaca.
+    tokenizer_config_folder: str = None,  # The prompt template to use, will default to alpaca.
 ):
     if int(os.environ.get("LOCAL_RANK", 0)) == 0:
         print(
@@ -171,16 +172,6 @@ def train(
     )
 
     model_name = base_model.split("/")[-1].split("-")[0]
-
-    tokenizer = AutoTokenizer.from_pretrained(base_model)
-
-    tokenizer.pad_token_id = (
-        0  # unk. we want this to be different from the eos token
-    )
-    if model_name == "mpt":
-        tokenizer.padding_side = "right"
-    else:  # Allow batched inference
-        tokenizer.padding_side = "left"
 
     def tokenize(prompt, add_eos_token=True):
         # there's probably a way to do this with the tokenizer settings
@@ -279,6 +270,19 @@ def train(
 
     model.print_trainable_parameters()  # Be more transparent about the % of trainable params.
 
+    if tokenizer_config_folder:
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_config_folder)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(base_model)
+
+    tokenizer.pad_token_id = (
+        0  # unk. we want this to be different from the eos token
+    )
+    if model_name == "mpt":
+        tokenizer.padding_side = "right"
+    else:  # Allow batched inference
+        tokenizer.padding_side = "left"
+
     if val_set_size > 0:
         train_val = data["train"].train_test_split(
             test_size=val_set_size, shuffle=True, seed=42
@@ -297,6 +301,8 @@ def train(
         # keeps Trainer from trying its own DataParallelism when more than 1 gpu is available
         model.is_parallelizable = True
         model.model_parallel = True
+
+    
 
     trainer = transformers.Trainer(
         model=model,
