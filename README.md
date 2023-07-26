@@ -15,5 +15,6 @@ train_lora.py \
     --learning_rate 1e-4 \
     --group_by_length \
     --output_dir {OUTPUT_DIR} \
-    --lora_r 8 
+    --lora_r 8 \
+    --load_in_8bit 
 ```
