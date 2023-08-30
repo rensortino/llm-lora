@@ -17,4 +17,7 @@ train_lora.py \
     --output_dir {OUTPUT_DIR} \
     --lora_r 8 \
     --load_in_8bit 
+    --tokenizer_config_folder lora-alpaca-legal-summary 
 ```
+
+The last option is needed only when training on summarization
