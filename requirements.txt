@@ -1,7 +1,11 @@
 fire
 transformers
-dataset
+datasets
 sentencepiece
 bitsandbytes
 accelerate
 peft
+scipy
+wandb==0.15.7
+dnspython==2.2.1
+einops
